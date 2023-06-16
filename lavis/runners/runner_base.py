@@ -91,8 +91,8 @@ class RunnerBase:
                     self._wrapped_model = DDP(
                         self._model, device_ids=[self.config.run_cfg.gpu]
                     )
-            else:
-                self._wrapped_model = self._model
+        else:
+            self._wrapped_model = self._model
 
         return self._wrapped_model
 
@@ -426,6 +426,8 @@ class RunnerBase:
 
     def train_epoch(self, epoch):
         # train
+        print("============================= self.model: ===================================", self.model)
+        # print("============ self._model: {} =============", self._model)
         self.model.train()
 
         return self.task.train_epoch(

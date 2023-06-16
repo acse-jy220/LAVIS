@@ -7,6 +7,7 @@ model:
   arch: blip2
   model_type: pretrain
   load_pretrained: False #pretrain from scratch
+  vit_precision: "fp32"
   freeze_vit: True
 
 
@@ -19,20 +20,20 @@ datasets:
     text_processor:
         train:
           name: "blip_caption"
-#     build_info:
-#         images:
-#             storage: '/export/share/datasets/vision/coco/images/'          
-  vg_caption: # name of the dataset builder
-    vis_processor:
-        train:
-          name: "blip_image_train"
-          image_size: 224
-    text_processor:
-        train:
-          name: "blip_caption"
-#     build_info:
-#         images:
-#             storage: '//export/share/datasets/vision/visual-genome/image/'
+    build_info:
+        images:
+            storage: '/export/home/.cache/lavis/coco/images/'          
+  # vg_caption: # name of the dataset builder
+  #   vis_processor:
+  #       train:
+  #         name: "blip_image_train"
+  #         image_size: 224
+  #   text_processor:
+  #       train:
+  #         name: "blip_caption"
+  #   build_info:
+  #       images:
+  #           storage: '/export/home/.cache/lavis/vg/images/VG_100K_2'
 
 run:
   task: image_text_pretrain

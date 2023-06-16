@@ -335,6 +335,7 @@ class RandomAugment(object):
 
     def get_random_ops(self):
         sampled_ops = np.random.choice(self.augs, self.N)
+        print("augment ops: ", sampled_ops)
         return [(op, 0.5, self.M) for op in sampled_ops]
 
     def __call__(self, img):
@@ -393,6 +394,11 @@ class VideoRandomAugment(object):
 
 
 if __name__ == "__main__":
-    a = RandomAugment()
-    img = np.random.randn(32, 32, 3)
-    a(img)
+    from PIL import Image
+    a = RandomAugment(isPIL=True)
+    img_addr = "/mnt/c/Users/GeneYu/desktop/motor.jpg"
+    img = Image.open(img_addr)
+    img = a(img)
+    if not isinstance(img, Image.Image):
+        img = Image.fromarray(img)
+    img.save("/mnt/c/Users/GeneYu/desktop/after_augment.jpg")

@@ -51,6 +51,8 @@ class Blip2Base(BaseModel):
         encoder_config.add_cross_attention = True
         encoder_config.cross_attention_freq = cross_attention_freq
         encoder_config.query_length = num_query_token
+        print("encoder_config config is: ", encoder_config)
+        # encoder_config.save_pretrained("/mnt/d/QFormer/encoder")
         Qformer = BertLMHeadModel.from_pretrained(
             "bert-base-uncased", config=encoder_config
         )

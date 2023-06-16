@@ -15,6 +15,7 @@ from lavis.common.dist_utils import download_cached_file, is_dist_avail_and_init
 from lavis.common.utils import get_abs_path, is_url
 from omegaconf import OmegaConf
 
+CPU_WORLD_SIZE = 1
 
 class BaseModel(nn.Module):
     """Base class for models."""
@@ -191,15 +192,16 @@ class GatherLayer(torch.autograd.Function):
     @staticmethod
     def forward(ctx, x):
         output = [
-            torch.zeros_like(x) for _ in range(torch.distributed.get_world_size())
+            # torch.zeros_like(x) for _ in range(torch.distributed.get_world_size())
+            torch.zeros_like(x) for _ in range(CPU_WORLD_SIZE)
         ]
-        torch.distributed.all_gather(output, x)
+        # torch.distributed.all_gather(output, x)
         return tuple(output)
 
     @staticmethod
     def backward(ctx, *grads):
         all_gradients = torch.stack(grads)
-        torch.distributed.all_reduce(all_gradients)
+        # torch.distributed.all_reduce(all_gradients)
         return all_gradients[torch.distributed.get_rank()]
 
 
@@ -209,7 +211,8 @@ def all_gather_with_grad(tensors):
     Graph remains connected for backward grad computation.
     """
     # Queue the gathered tensors
-    world_size = torch.distributed.get_world_size()
+    # world_size = torch.distributed.get_world_size()
+    world_size = CPU_WORLD_SIZE
     # There is no need for reduction in the single-proc case
     if world_size == 1:
         return tensors
@@ -231,9 +234,10 @@ def concat_all_gather(tensor):
         return tensor
 
     tensors_gather = [
-        torch.ones_like(tensor) for _ in range(torch.distributed.get_world_size())
+        # torch.ones_like(tensor) for _ in range(torch.distributed.get_world_size())
+        torch.ones_like(tensor) for _ in range(CPU_WORLD_SIZE)
     ]
-    torch.distributed.all_gather(tensors_gather, tensor, async_op=False)
+    # torch.distributed.all_gather(tensors_gather, tensor, async_op=False)
 
     output = torch.cat(tensors_gather, dim=0)
     return output

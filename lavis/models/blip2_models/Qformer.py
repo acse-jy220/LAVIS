@@ -1,3 +1,18 @@
+import inspect
+vname = lambda v,nms: [ vn for vn in nms if id(v)==id(nms[vn])][0]
+
+import torch
+def save_param(ms_tensor: torch.Tensor, ms_tensor_name: str):
+    # ms_tensor_name = vname(ms_tensor, locals())
+    print("torch_tensor_name is ", ms_tensor_name)
+    save_path = "/mnt/d/compare/" + ms_tensor_name + ".pth"
+    print("save path is ", save_path)
+    torch.save(ms_tensor, save_path)
+    
+def save_params(params: dict):
+    for name, param in params.items():
+        save_param(param, name)
+    
 """
  * Copyright (c) 2023, salesforce.com, inc.
  * All rights reserved.
@@ -9,32 +24,20 @@
 """
 
 import math
-import os
-import warnings
-from dataclasses import dataclass
-from typing import Optional, Tuple, Dict, Any
+from typing import Tuple
 
 import torch
-from torch import Tensor, device, dtype, nn
+from torch import Tensor, device, nn
 import torch.utils.checkpoint
 from torch import nn
 from torch.nn import CrossEntropyLoss
-import torch.nn.functional as F
 
 from transformers.activations import ACT2FN
-from transformers.file_utils import (
-    ModelOutput,
-)
 from transformers.modeling_outputs import (
     BaseModelOutputWithPastAndCrossAttentions,
     BaseModelOutputWithPoolingAndCrossAttentions,
     CausalLMOutputWithCrossAttentions,
-    MaskedLMOutput,
-    MultipleChoiceModelOutput,
-    NextSentencePredictorOutput,
-    QuestionAnsweringModelOutput,
-    SequenceClassifierOutput,
-    TokenClassifierOutput,
+    MaskedLMOutput
 )
 from transformers.modeling_utils import (
     PreTrainedModel,
@@ -47,6 +50,71 @@ from transformers.models.bert.configuration_bert import BertConfig
 
 logger = logging.get_logger(__name__)
 
+def ForLoop_L2_weight(x:torch.Tensor, dim):
+    a = x.clone()
+    slices = [slice(None) for i in range(x.ndim)]
+    sum1 = 0
+    for i in range(x.shape[dim]):
+        slices[dim] = i
+        idx_slice = tuple(slices)
+        # print(idx_slice)
+        sum1 += x[idx_slice] ** 2
+
+    sum2 = 0
+    for i in range(x.shape[dim]):
+        slices[dim] = i
+        idx_slice = tuple(slices)
+        if i != x.shape[dim] - 1:
+            a[idx_slice] = x[idx_slice] ** 2 / sum1
+            sum2 += a[idx_slice]
+        else:
+            a[idx_slice] = 1 - sum2
+
+    return a
+
+class Mock_Linear(nn.Module):
+    __constants__ = ['in_features', 'out_features']
+    in_features: int
+    out_features: int
+    weight: torch.Tensor
+
+    def __init__(self, in_features: int, out_features: int, bias: bool = True,
+                 device=None, dtype=None) -> None:
+        factory_kwargs = {'device': device, 'dtype': dtype}
+        super().__init__()
+        self.in_features = in_features
+        self.out_features = out_features
+        self.weight = nn.Parameter(torch.empty((out_features, in_features), **factory_kwargs))
+        if bias:
+            self.bias = nn.Parameter(torch.empty(out_features, **factory_kwargs))
+        else:
+            self.register_parameter('bias', None)
+
+    def forward(self, input: torch.Tensor) -> torch.Tensor:
+        if input.shape[-1] != self.in_features:
+            raise ValueError
+        if self.out_features > self.in_features:
+            multi = int(self.out_features / self.in_features)
+            rem = int(self.out_features % self.in_features)
+            rep_tuple = [1] * input.ndim
+            rep_tuple[-1] = multi
+            rep_tuple = tuple(rep_tuple)
+            return torch.cat((input.repeat(*rep_tuple), input[..., :rem]), dim=-1)
+        else:
+            return input[..., :self.out_features].clone()
+
+    def extra_repr(self) -> str:
+        return 'in_features={}, out_features={}, bias={}'.format(
+            self.in_features, self.out_features, self.bias is not None
+        )
+        
+class IdentityACT(nn.Module):
+    """
+    Applies the linear activation function, i.e. forwarding input directly to output.
+    """
+
+    def forward(self, input: Tensor) -> Tensor:
+        return input
 
 class BertEmbeddings(nn.Module):
     """Construct the embeddings from word and position embeddings."""
@@ -103,7 +171,7 @@ class BertEmbeddings(nn.Module):
         else:
             embeddings = query_embeds
 
-        embeddings = self.LayerNorm(embeddings)
+        # embeddings = self.LayerNorm(embeddings)
         embeddings = self.dropout(embeddings)
         return embeddings
 
@@ -124,13 +192,13 @@ class BertSelfAttention(nn.Module):
         self.attention_head_size = int(config.hidden_size / config.num_attention_heads)
         self.all_head_size = self.num_attention_heads * self.attention_head_size
 
-        self.query = nn.Linear(config.hidden_size, self.all_head_size)
+        self.query = Mock_Linear(config.hidden_size, self.all_head_size)
         if is_cross_attention:
-            self.key = nn.Linear(config.encoder_width, self.all_head_size)
-            self.value = nn.Linear(config.encoder_width, self.all_head_size)
+            self.key = Mock_Linear(config.encoder_width, self.all_head_size)
+            self.value = Mock_Linear(config.encoder_width, self.all_head_size)
         else:
-            self.key = nn.Linear(config.hidden_size, self.all_head_size)
-            self.value = nn.Linear(config.hidden_size, self.all_head_size)
+            self.key = Mock_Linear(config.hidden_size, self.all_head_size)
+            self.value = Mock_Linear(config.hidden_size, self.all_head_size)
 
         self.dropout = nn.Dropout(config.attention_probs_dropout_prob)
         self.position_embedding_type = getattr(
@@ -247,11 +315,20 @@ class BertSelfAttention(nn.Module):
             attention_scores = attention_scores + attention_mask
 
         # Normalize the attention scores to probabilities.
-        attention_probs = nn.Softmax(dim=-1)(attention_scores)
+        # attention_probs = nn.Softmax(dim=-1)(attention_scores)
+        # print("attention_probs.sum(-1)", attention_probs.sum(-1))
+        attention_probs = ForLoop_L2_weight(attention_scores, -1)
+        # deprecated: save-load force Equal
+        # torch.save(attention_probs, "/mnt/d/compare/fixed_attention_probs.pth")
+        # import mindspore as ms
+        # new_params_list = []
+        # numpy_value = attention_probs.detach().numpy()
+        # new_params_list.append({"name": "fixed_attention_probs", "data": ms.Tensor.from_numpy(numpy_value)})
+        # ms.save_checkpoint(new_params_list, "/mnt/d/compare/fixed_attention_probs.ckpt")
 
         if is_cross_attention and self.save_attention:
             self.save_attention_map(attention_probs)
-            attention_probs.register_hook(self.save_attn_gradients)
+            # attention_probs.register_hook(self.save_attn_gradients)
 
         # This is actually dropping out entire tokens to attend to, which might
         # seem a bit unusual, but is taken from the original Transformer paper.
@@ -278,14 +355,14 @@ class BertSelfAttention(nn.Module):
 class BertSelfOutput(nn.Module):
     def __init__(self, config):
         super().__init__()
-        self.dense = nn.Linear(config.hidden_size, config.hidden_size)
+        self.dense = Mock_Linear(config.hidden_size, config.hidden_size)
         self.LayerNorm = nn.LayerNorm(config.hidden_size, eps=config.layer_norm_eps)
         self.dropout = nn.Dropout(config.hidden_dropout_prob)
 
     def forward(self, hidden_states, input_tensor):
         hidden_states = self.dense(hidden_states)
         hidden_states = self.dropout(hidden_states)
-        hidden_states = self.LayerNorm(hidden_states + input_tensor)
+        # hidden_states = self.LayerNorm(hidden_states + input_tensor)
         return hidden_states
 
 
@@ -349,9 +426,10 @@ class BertAttention(nn.Module):
 class BertIntermediate(nn.Module):
     def __init__(self, config):
         super().__init__()
-        self.dense = nn.Linear(config.hidden_size, config.intermediate_size)
+        self.dense = Mock_Linear(config.hidden_size, config.intermediate_size)
         if isinstance(config.hidden_act, str):
-            self.intermediate_act_fn = ACT2FN[config.hidden_act]
+            # self.intermediate_act_fn = ACT2FN[config.hidden_act]
+            self.intermediate_act_fn = ACT2FN["linear"] # TODO: to Remove
         else:
             self.intermediate_act_fn = config.hidden_act
 
@@ -364,14 +442,14 @@ class BertIntermediate(nn.Module):
 class BertOutput(nn.Module):
     def __init__(self, config):
         super().__init__()
-        self.dense = nn.Linear(config.intermediate_size, config.hidden_size)
+        self.dense = Mock_Linear(config.intermediate_size, config.hidden_size)
         self.LayerNorm = nn.LayerNorm(config.hidden_size, eps=config.layer_norm_eps)
         self.dropout = nn.Dropout(config.hidden_dropout_prob)
 
     def forward(self, hidden_states, input_tensor):
         hidden_states = self.dense(hidden_states)
         hidden_states = self.dropout(hidden_states)
-        hidden_states = self.LayerNorm(hidden_states + input_tensor)
+        # hidden_states = self.LayerNorm(hidden_states + input_tensor)
         return hidden_states
 
 
@@ -516,47 +594,48 @@ class BertEncoder(nn.Module):
 
         for i in range(self.config.num_hidden_layers):
             layer_module = self.layer[i]
+            # print("\nenter self.layer[{}]\n".format(i))
             if output_hidden_states:
                 all_hidden_states = all_hidden_states + (hidden_states,)
 
             layer_head_mask = head_mask[i] if head_mask is not None else None
             past_key_value = past_key_values[i] if past_key_values is not None else None
 
-            if getattr(self.config, "gradient_checkpointing", False) and self.training:
+            # if getattr(self.config, "gradient_checkpointing", False) and self.training:
 
-                if use_cache:
-                    logger.warn(
-                        "`use_cache=True` is incompatible with gradient checkpointing. Setting `use_cache=False`..."
-                    )
-                    use_cache = False
+            #     if use_cache:
+            #         logger.warn(
+            #             "`use_cache=True` is incompatible with gradient checkpointing. Setting `use_cache=False`..."
+            #         )
+            #         use_cache = False
 
-                def create_custom_forward(module):
-                    def custom_forward(*inputs):
-                        return module(
-                            *inputs, past_key_value, output_attentions, query_length
-                        )
+            #     def create_custom_forward(module):
+            #         def custom_forward(*inputs):
+            #             return module(
+            #                 *inputs, past_key_value, output_attentions, query_length
+            #             )
 
-                    return custom_forward
+            #         return custom_forward
 
-                layer_outputs = torch.utils.checkpoint.checkpoint(
-                    create_custom_forward(layer_module),
-                    hidden_states,
-                    attention_mask,
-                    layer_head_mask,
-                    encoder_hidden_states,
-                    encoder_attention_mask,
-                )
-            else:
-                layer_outputs = layer_module(
-                    hidden_states,
-                    attention_mask,
-                    layer_head_mask,
-                    encoder_hidden_states,
-                    encoder_attention_mask,
-                    past_key_value,
-                    output_attentions,
-                    query_length,
-                )
+            #     layer_outputs = torch.utils.checkpoint.checkpoint(
+            #         create_custom_forward(layer_module),
+            #         hidden_states,
+            #         attention_mask,
+            #         layer_head_mask,
+            #         encoder_hidden_states,
+            #         encoder_attention_mask,
+            #     )
+            # else:
+            layer_outputs = layer_module(
+                hidden_states,
+                attention_mask,
+                layer_head_mask,
+                encoder_hidden_states,
+                encoder_attention_mask,
+                past_key_value,
+                output_attentions,
+                query_length,
+            )
 
             hidden_states = layer_outputs[0]
             if use_cache:
@@ -592,8 +671,9 @@ class BertEncoder(nn.Module):
 class BertPooler(nn.Module):
     def __init__(self, config):
         super().__init__()
-        self.dense = nn.Linear(config.hidden_size, config.hidden_size)
-        self.activation = nn.Tanh()
+        self.dense = Mock_Linear(config.hidden_size, config.hidden_size)
+        # self.activation = nn.Tanh()
+        self.activation = ACT2FN["linear"] # TODO: to Remove
 
     def forward(self, hidden_states):
         # We "pool" the model by simply taking the hidden state corresponding
@@ -607,17 +687,19 @@ class BertPooler(nn.Module):
 class BertPredictionHeadTransform(nn.Module):
     def __init__(self, config):
         super().__init__()
-        self.dense = nn.Linear(config.hidden_size, config.hidden_size)
+        self.dense = Mock_Linear(config.hidden_size, config.hidden_size)
         if isinstance(config.hidden_act, str):
-            self.transform_act_fn = ACT2FN[config.hidden_act]
+            # self.transform_act_fn = ACT2FN[config.hidden_act]
+            self.transform_act_fn = ACT2FN["linear"] # TODO: to Remove
         else:
             self.transform_act_fn = config.hidden_act
+        # self.intermediate_act_fn = IdentityACT # TODO: to Remove
         self.LayerNorm = nn.LayerNorm(config.hidden_size, eps=config.layer_norm_eps)
 
     def forward(self, hidden_states):
         hidden_states = self.dense(hidden_states)
         hidden_states = self.transform_act_fn(hidden_states)
-        hidden_states = self.LayerNorm(hidden_states)
+        # hidden_states = self.LayerNorm(hidden_states)
         return hidden_states
 
 
@@ -628,7 +710,7 @@ class BertLMPredictionHead(nn.Module):
 
         # The output weights are the same as the input embeddings, but there is
         # an output-only bias for each token.
-        self.decoder = nn.Linear(config.hidden_size, config.vocab_size, bias=False)
+        self.decoder = Mock_Linear(config.hidden_size, config.vocab_size, bias=False)
 
         self.bias = nn.Parameter(torch.zeros(config.vocab_size))
 
@@ -663,14 +745,14 @@ class BertPreTrainedModel(PreTrainedModel):
 
     def _init_weights(self, module):
         """Initialize the weights"""
-        if isinstance(module, (nn.Linear, nn.Embedding)):
+        if isinstance(module, (Mock_Linear, nn.Embedding)):
             # Slightly different from the TF version which uses truncated_normal for initialization
             # cf https://github.com/pytorch/pytorch/pull/5617
             module.weight.data.normal_(mean=0.0, std=self.config.initializer_range)
         elif isinstance(module, nn.LayerNorm):
             module.bias.data.zero_()
             module.weight.data.fill_(1.0)
-        if isinstance(module, nn.Linear) and module.bias is not None:
+        if isinstance(module, Mock_Linear) and module.bias is not None:
             module.bias.data.zero_()
 
 
@@ -971,9 +1053,13 @@ class BertLMHeadModel(BertPreTrainedModel):
     _keys_to_ignore_on_load_missing = [r"position_ids", r"predictions.decoder.bias"]
 
     def __init__(self, config):
+        config.attention_probs_dropout_prob = 0.0
+        config.hidden_dropout_prob = 0.0
+        # print("BertLMHeadModel config is: ", config)
+        config.save_pretrained("/mnt/d/QFormer")
         super().__init__(config)
-
         self.bert = BertModel(config, add_pooling_layer=False)
+
         self.cls = BertOnlyMLMHead(config)
 
         self.init_weights()
