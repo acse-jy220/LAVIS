@@ -75,7 +75,7 @@ class Blip2Qformer(Blip2Base):
         self.Qformer.resize_token_embeddings(len(self.tokenizer))
         state_dict = self.Qformer.state_dict()
         # print("========saving state_dict ...============")
-        torch.save(state_dict, "/mnt/d/QFormer/self_Qformer_state_dict_init.pth")
+        # torch.save(state_dict, "/mnt/d/QFormer/self_Qformer_state_dict_init.pth")
         print("========loading and compare state_dict ...============")
         state_dict2 = torch.load("/mnt/d/QFormer/self_Qformer_state_dict_init.pth", map_location="cpu")
         for name, xx in state_dict.items():

@@ -280,6 +280,7 @@ def rotate_level_to_args(MAX_LEVEL, replace_value):
         level = (level / MAX_LEVEL) * 30
         if np.random.random() < 0.5:
             level = -level
+        print("rotate degree: ", level)
         return (level, replace_value)
 
     return level_to_args
@@ -398,7 +399,8 @@ if __name__ == "__main__":
     a = RandomAugment(isPIL=True)
     img_addr = "/mnt/c/Users/GeneYu/desktop/motor.jpg"
     img = Image.open(img_addr)
-    img = a(img)
+    for i in range(10):
+        img = a(img)
     if not isinstance(img, Image.Image):
         img = Image.fromarray(img)
-    img.save("/mnt/c/Users/GeneYu/desktop/after_augment.jpg")
+    img.save("/mnt/c/Users/GeneYu/desktop/after_augment_LAVIS.jpg")

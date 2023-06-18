@@ -21,7 +21,7 @@ model:
   num_query_token: 32
 
   # LLM
-  llm_model: "/export/home/project/stanford_alpaca/llama_7B"
+  llm_model: "/mnt/h/Blip2Dir/project/stanford_alpaca/llama_7B"
 
   # generation configs
   prompt: ""
