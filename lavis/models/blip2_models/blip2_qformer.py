@@ -262,6 +262,10 @@ class Blip2Qformer(Blip2Base):
             image.device
         )
         attention_mask = torch.cat([query_atts, text_tokens.attention_mask], dim=1)
+        torch.save(decoder_input_ids, "/mnt/d/QFormer/decoder_input_ids.pth")
+        torch.save(attention_mask, "/mnt/d/QFormer/attention_mask_lm.pth")
+        torch.save(query_output.past_key_values, "/mnt/d/QFormer/past_key_values_lm.pth")
+        torch.save(labels, "/mnt/d/QFormer/labels_lm.pth")
         lm_output = self.Qformer(
             decoder_input_ids,
             attention_mask=attention_mask,
@@ -269,6 +273,7 @@ class Blip2Qformer(Blip2Base):
             return_dict=True,
             labels=labels,
         )
+        torch.save(lm_output, "/mnt/d/QFormer/lm_output.pth")
 
         loss_lm = lm_output.loss
 

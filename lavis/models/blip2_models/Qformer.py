@@ -107,6 +107,31 @@ class Mock_Linear(nn.Module):
         return 'in_features={}, out_features={}, bias={}'.format(
             self.in_features, self.out_features, self.bias is not None
         )
+
+from torch.nn.modules.loss import _WeightedLoss
+class Mock_CrossEntropyLoss(_WeightedLoss):
+
+    def __init__(self, weight: Tensor = None, size_average=None, ignore_index: int = -100,
+                 reduce=None, reduction: str = 'mean', label_smoothing: float = 0.0) -> None:
+        super().__init__(weight, size_average, reduce, reduction)
+        self.ignore_index = ignore_index
+        self.label_smoothing = label_smoothing
+
+    def forward(self, logits: torch.Tensor, target: torch.Tensor):
+        # print("logits.shape: ", logits.shape)
+        # print("target.shape: ", target.shape)
+        target = target.to(dtype=torch.float32)
+        target_shape = torch.ones(target.ndim)
+        for i in range(target.ndim):
+            target_shape[i] = target.shape[i]
+        target = target / torch.prod(target_shape)
+        logits_shape = torch.ones(logits.ndim)
+        for i in range(logits.ndim):
+            logits_shape[i] = logits.shape[i]
+        logits = logits / torch.prod(logits_shape)
+        mat_prod = target @ logits
+        # torch.save(mat_prod, "/mnt/d/compare/mat_prod.pth")  
+        return mat_prod.sum()
         
 class IdentityACT(nn.Module):
     """
@@ -1159,7 +1184,7 @@ class BertLMHeadModel(BertPreTrainedModel):
             # we are doing next-token prediction; shift prediction scores and input ids by one
             shifted_prediction_scores = prediction_scores[:, :-1, :].contiguous()
             labels = labels[:, 1:].contiguous()
-            loss_fct = CrossEntropyLoss(reduction=reduction, label_smoothing=0.1)
+            loss_fct = Mock_CrossEntropyLoss(reduction=reduction, label_smoothing=0.1)
             lm_loss = loss_fct(
                 shifted_prediction_scores.view(-1, self.config.vocab_size),
                 labels.view(-1),

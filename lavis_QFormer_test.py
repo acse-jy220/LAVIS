@@ -151,3 +151,20 @@ output_itm_real = torch.load("/mnt/d/QFormer/output_itm.pth")
 
 ModelOutputCompare(output_itm, output_itm_real)    
 SaveOutput(output_itm, "output_itm")
+
+# 4)
+decoder_input_ids = torch.load("/mnt/d/QFormer/decoder_input_ids.pth")
+attention_mask = torch.load("/mnt/d/QFormer/attention_mask_lm.pth")
+past_key_values = torch.load("/mnt/d/QFormer/past_key_values_lm.pth")
+labels = torch.load("/mnt/d/QFormer/labels_lm.pth")
+lm_output = qFormer(
+    decoder_input_ids,
+    attention_mask=attention_mask,
+    past_key_values=past_key_values,
+    return_dict=True,
+    labels=labels,
+)
+lm_output_real = torch.load("/mnt/d/QFormer/lm_output.pth")
+
+ModelOutputCompare(lm_output, lm_output_real)    
+SaveOutput(lm_output, "lm_output")
