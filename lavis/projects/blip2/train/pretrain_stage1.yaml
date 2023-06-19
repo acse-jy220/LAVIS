@@ -22,7 +22,7 @@ datasets:
           name: "blip_caption"
     build_info:
         images:
-            storage: '/mnt/h/Blip2Dir/.cache/lavis/coco/images/'          
+            storage: '/export/home/.cache/lavis/coco/images/'          
   # vg_caption: # name of the dataset builder
   #   vis_processor:
   #       train:
@@ -33,7 +33,7 @@ datasets:
   #         name: "blip_caption"
   #   build_info:
   #       images:
-  #           storage: '/mnt/h/Blip2Dir/.cache/lavis/vg/images/VG_100K_2'
+  #           storage: '/export/home/.cache/lavis/vg/images/VG_100K_2'
 
 run:
   task: image_text_pretrain

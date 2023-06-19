@@ -13,7 +13,7 @@ datasets:
       annotations:
         train:
           url:
-              - /mnt/h/Blip2Dir/workspace/datasets/cc3m.json
+              - /export/home/workspace/datasets/cc3m.json
           storage:
               - conceptual_caption/annotations/cc3m.json
       images:

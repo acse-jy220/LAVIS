@@ -46,8 +46,8 @@ vis_processor = BlipImageEvalProcessor(image_size=224)
 text_processor = BlipCaptionProcessor()
 
 # files to process
-# file_root = "/mnt/h/Blip2Dir/.cache/lavis/coco/images/val2014"
-file_root = "/mnt/h/Blip2Dir/.cache/lavis/coco/images/train2014"
+# file_root = "/export/home/.cache/lavis/coco/images/val2014"
+file_root = "/export/home/.cache/lavis/coco/images/train2014"
 filepaths = os.listdir(file_root)
 
 print(len(filepaths))
