@@ -132,25 +132,25 @@ text_output_real = torch.load("/mnt/d/QFormer/text_output.pth")
 ModelOutputCompare(text_output, text_output_real)    
 SaveOutput(text_output, "text_output")
 
-# 3)
-text_ids_all = torch.load("/mnt/d/QFormer/text_ids_all.pth")
-query_tokens_itm = torch.load("/mnt/d/QFormer/query_tokens_itm.pth")
-attention_mask_all = torch.load("/mnt/d/QFormer/attention_mask_all.pth")
-image_embeds_all = torch.load("/mnt/d/QFormer/image_embeds_all.pth")
-image_atts_all = torch.load("/mnt/d/QFormer/image_atts_all.pth")
+# # 3)
+# text_ids_all = torch.load("/mnt/d/QFormer/text_ids_all.pth")
+# query_tokens_itm = torch.load("/mnt/d/QFormer/query_tokens_itm.pth")
+# attention_mask_all = torch.load("/mnt/d/QFormer/attention_mask_all.pth")
+# image_embeds_all = torch.load("/mnt/d/QFormer/image_embeds_all.pth")
+# image_atts_all = torch.load("/mnt/d/QFormer/image_atts_all.pth")
 
-output_itm = qFormer.bert(
-    text_ids_all,
-    query_embeds=query_tokens_itm,
-    attention_mask=attention_mask_all,
-    encoder_hidden_states=image_embeds_all,
-    encoder_attention_mask=image_atts_all,
-    return_dict=True,
-)
-output_itm_real = torch.load("/mnt/d/QFormer/output_itm.pth")
+# output_itm = qFormer.bert(
+#     text_ids_all,
+#     query_embeds=query_tokens_itm,
+#     attention_mask=attention_mask_all,
+#     encoder_hidden_states=image_embeds_all,
+#     encoder_attention_mask=image_atts_all,
+#     return_dict=True,
+# )
+# output_itm_real = torch.load("/mnt/d/QFormer/output_itm.pth")
 
-ModelOutputCompare(output_itm, output_itm_real)    
-SaveOutput(output_itm, "output_itm")
+# ModelOutputCompare(output_itm, output_itm_real)    
+# SaveOutput(output_itm, "output_itm")
 
 # 4)
 decoder_input_ids = torch.load("/mnt/d/QFormer/decoder_input_ids.pth")
