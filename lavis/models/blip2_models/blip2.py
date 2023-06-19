@@ -51,6 +51,8 @@ class Blip2Base(BaseModel):
         encoder_config.add_cross_attention = True
         encoder_config.cross_attention_freq = cross_attention_freq
         encoder_config.query_length = num_query_token
+        encoder_config.attention_probs_dropout_prob = 0.0
+        encoder_config.hidden_dropout_prob = 0.0
         Qformer = BertLMHeadModel.from_pretrained(
             "bert-base-uncased", config=encoder_config
         )

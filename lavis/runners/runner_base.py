@@ -91,8 +91,8 @@ class RunnerBase:
                     self._wrapped_model = DDP(
                         self._model, device_ids=[self.config.run_cfg.gpu]
                     )
-            else:
-                self._wrapped_model = self._model
+        else:
+            self._wrapped_model = self._model
 
         return self._wrapped_model
 

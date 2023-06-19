@@ -71,8 +71,16 @@ class Blip2Qformer(Blip2Base):
         self.Qformer, self.query_tokens = self.init_Qformer(
             num_query_token, self.visual_encoder.num_features, cross_attention_freq
         )
+        print("self.Qformer.resize_token_embeddings(len(self.tokenizer)): ", len(self.tokenizer))
         self.Qformer.resize_token_embeddings(len(self.tokenizer))
         state_dict = self.Qformer.state_dict()
+        # print("========saving state_dict ...============")
+        # torch.save(state_dict, "/mnt/d/QFormer_origin/self_Qformer_state_dict_init.pth")
+        print("========loading and compare state_dict ...============")
+        state_dict2 = torch.load("/mnt/d/QFormer_origin/self_Qformer_state_dict_init.pth", map_location="cpu")
+        for name, xx in state_dict.items():
+            print(name, xx.equal(state_dict2[name]))
+
         for name, param in self.Qformer.named_parameters():
             if "_query" in name:
                 key_orig = name.replace("_query", "")
@@ -97,7 +105,10 @@ class Blip2Qformer(Blip2Base):
         )
 
         query_tokens = self.query_tokens.expand(image_embeds.shape[0], -1, -1)
-
+        
+        torch.save(query_tokens, "/mnt/d/QFormer_origin/query_tokens1.pth")
+        torch.save(image_embeds, "/mnt/d/QFormer_origin/image_embeds1.pth")
+        torch.save(image_atts, "/mnt/d/QFormer_origin/image_atts1.pth")
         query_output = self.Qformer.bert(
             query_embeds=query_tokens,
             encoder_hidden_states=image_embeds,
@@ -105,6 +116,7 @@ class Blip2Qformer(Blip2Base):
             use_cache=True,
             return_dict=True,
         )
+        torch.save(query_output, "/mnt/d/QFormer_origin/query_output1.pth")
 
         image_feats = F.normalize(
             self.vision_proj(query_output.last_hidden_state), dim=-1
@@ -117,11 +129,14 @@ class Blip2Qformer(Blip2Base):
             max_length=self.max_txt_len,
             return_tensors="pt",
         ).to(image.device)
+        torch.save(text_tokens.input_ids, "/mnt/d/QFormer_origin/input_ids.pth")
+        torch.save(text_tokens.attention_mask, "/mnt/d/QFormer_origin/attention_mask.pth")
         text_output = self.Qformer.bert(
             text_tokens.input_ids,
             attention_mask=text_tokens.attention_mask,
             return_dict=True,
         )
+        torch.save(text_output, "/mnt/d/QFormer_origin/text_output.pth")
         text_feat = F.normalize(
             self.text_proj(text_output.last_hidden_state[:, 0, :]), dim=-1
         )
@@ -150,7 +165,8 @@ class Blip2Qformer(Blip2Base):
         sim_t2i, _ = sim_t2q.max(-1)
         sim_t2i = sim_t2i / self.temp  # [batch_size, batch_size*num_gpu]
 
-        rank = dist.get_rank()
+        # rank = dist.get_rank()
+        rank = 0
         bs = image.size(0)
         targets = torch.linspace(rank * bs, rank * bs + bs - 1, bs, dtype=int).to(
             image.device
@@ -210,14 +226,21 @@ class Blip2Qformer(Blip2Base):
             image.device
         )
 
-        output_itm = self.Qformer.bert(
-            text_ids_all,
-            query_embeds=query_tokens_itm,
-            attention_mask=attention_mask_all,
-            encoder_hidden_states=image_embeds_all,
-            encoder_attention_mask=image_atts_all,
-            return_dict=True,
-        )
+        # torch.save(text_ids_all, "/mnt/d/QFormer_origin/text_ids_all.pth")
+        # torch.save(query_tokens_itm, "/mnt/d/QFormer_origin/query_tokens_itm.pth")
+        # torch.save(attention_mask_all, "/mnt/d/QFormer_origin/attention_mask_all.pth")
+        # torch.save(image_embeds_all, "/mnt/d/QFormer_origin/image_embeds_all.pth")
+        # torch.save(image_atts_all, "/mnt/d/QFormer_origin/image_atts_all.pth")
+        # output_itm = self.Qformer.bert(
+        #     text_ids_all,
+        #     query_embeds=query_tokens_itm,
+        #     attention_mask=attention_mask_all,
+        #     encoder_hidden_states=image_embeds_all,
+        #     encoder_attention_mask=image_atts_all,
+        #     return_dict=True,
+        # )
+        # torch.save(output_itm, "/mnt/d/QFormer_origin/output_itm.pth")
+        output_itm = torch.load("/mnt/d/QFormer/output_itm.pth")
 
         vl_embeddings = output_itm.last_hidden_state[:, : query_tokens_itm.size(1), :]
         vl_output = self.itm_head(vl_embeddings)
@@ -240,6 +263,10 @@ class Blip2Qformer(Blip2Base):
             image.device
         )
         attention_mask = torch.cat([query_atts, text_tokens.attention_mask], dim=1)
+        torch.save(decoder_input_ids, "/mnt/d/QFormer_origin/decoder_input_ids.pth")
+        torch.save(attention_mask, "/mnt/d/QFormer_origin/attention_mask_lm.pth")
+        torch.save(query_output.past_key_values, "/mnt/d/QFormer_origin/past_key_values_lm.pth")
+        torch.save(labels, "/mnt/d/QFormer_origin/labels_lm.pth")
         lm_output = self.Qformer(
             decoder_input_ids,
             attention_mask=attention_mask,
@@ -247,6 +274,7 @@ class Blip2Qformer(Blip2Base):
             return_dict=True,
             labels=labels,
         )
+        torch.save(lm_output, "/mnt/d/QFormer_origin/lm_output.pth")
 
         loss_lm = lm_output.loss
 
